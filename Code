@@ -1,0 +1,187 @@
+#include <Servo.h>
+#include <SoftwareSerial.h>
+#include <dht11.h>
+#define DHT11PIN 7
+#include <SoftwareSerial.h>
+#include <MsTimer2.h>
+
+unsigned long previousMillis = 0;        
+//이전에 코드가 실행될때 millis() 시간값
+const long interval = 8000;
+//코드가 실행되는 주기를 10초로 설정
+//이 부분은 계속적으로 (10초 주기)로 이전 값과 차이를 비교하여 
+//조건을 맞추기 위해 설정한 코드
+const long interval2 = 10000;
+ 
+int Tx=2; //전송
+int Rx=3; //수신
+
+int motor_a = 11;
+int motor_b = 12;
+SoftwareSerial btSerial(Tx, Rx);
+
+dht11 DHT11;
+
+Servo servo;
+unsigned int soil_val;
+int servoValue =0;
+int soilSensor = 0;
+int motor_control = 8;
+int sw_temp;
+int sw_temp2;
+void setup() {
+
+  pinMode(6,INPUT);
+  pinMode(11, INPUT);       // Motor A 방향설정2
+  pinMode(5, OUTPUT);
+  pinMode(12, INPUT); 
+    
+
+  sw_temp=0;
+  sw_temp2=0;
+  Serial.begin(9600);
+  pinMode(soilSensor, INPUT); 
+  btSerial.begin(9600);
+  
+  
+  MsTimer2::set(1000, timerISR);
+  MsTimer2::start();
+  
+
+ 
+}
+String myString="";
+void timerISR(){
+  
+   soil_val = analogRead(soilSensor);
+  String soil = "soil"; 
+  soil = soil+soil_val;
+  btSerial.println(soil);
+  Serial.println(soil_val);
+  //delay(20000);
+  
+  if(soil_val > 800){  //수분 조절 모터 
+    servo.attach(motor_control);    
+    servoValue=0;
+    servo.write(servoValue);
+  }else{
+    servoValue=180;
+    servo.write(servoValue);
+  }
+  
+}
+
+
+void loop() {
+  int i;
+  int chk=DHT11.read(DHT11PIN);  //온습도 조절하는데 실험1
+  
+ // unsigned long currentMillis = millis();
+  //currentMillis에 현재시간을 저장 
+
+//if (currentMillis - previousMillis >= interval) {  
+ //   previousMillis = currentMillis;
+  //마지막 코드가 작동했던 시간을 현재시간으로 업데이트하는 코드
+  //현재시간과 코드가 작동했던 시간의 차 
+  if (btSerial.available()) {    
+        char my;
+//    Serial.println("Send Android");
+     while(btSerial.available()){      
+        my = (char)btSerial.read();
+        myString=myString+my;
+        delay(5);
+      }
+      myString.trim();
+      
+      if(myString.equals("pan")){
+        if(sw_temp==0){
+          sw_temp = 1;
+          digitalWrite(11, LOW);     // Motor A 방향설정1
+          digitalWrite(12, LOW);      // Motor A 방향설정2
+        }else if(sw_temp==1){
+         sw_temp = 0;
+        digitalWrite(11, HIGH);     // Motor A 방향설정1
+        digitalWrite(12, LOW);      // Motor A 방향설정2
+      }        
+      }
+      if(myString.equals("led")){
+        if(sw_temp2==0){
+          sw_temp2 = 1;
+          digitalWrite(5, LOW);     // Motor A 방향설정1          
+        }else if(sw_temp2==1){
+         sw_temp2 = 0;
+        digitalWrite(5, HIGH);     // Motor A 방향설정1        
+      }        
+      }
+      Serial.println(myString);
+     
+      myString="";
+     
+  }
+  if (Serial.available()) {
+    char my;
+    while(Serial.available()){
+//    btSerial.write(Serial.read());
+//    btSerial.write(0x0d);
+    my = (char)Serial.read();
+    btSerial.write(my);
+    myString=myString+my;
+    delay(5);
+    }
+    btSerial.write(0x0d);     
+    if(!myString.equals(""))
+    {
+      Serial.println(myString);
+      myString="";
+    }
+  }  
+Serial.println(sw_temp);
+
+
+
+switch(chk){ //상태를 체크합니다. OK가 나와야 정상입니다.
+  case 0:Serial.println("DHT OK"); break;
+  case -1:Serial.println("checksum error"); break;
+  case -2:Serial.println("time out"); break;
+  default:Serial.println("unknown"); break;
+}
+Serial.print("Humidity (%): ");
+Serial.println(DHT11.humidity); //습도출력
+Serial.print("Temperature: ");
+Serial.println(DHT11.temperature); //온도 출력
+int nData = digitalRead(6);
+Serial.println(nData);
+
+String temp= "temp";
+temp=temp+DHT11.temperature;
+btSerial.println(temp);
+temp="hum";
+temp=temp+DHT11.humidity;
+delay(10);
+btSerial.println(temp);
+temp="zdo";
+temp=temp+nData;
+btSerial.println(temp);
+//delay(1000); //2초 지연
+
+//if (currentMillis - previousMillis >= interval2) {  
+ //   previousMillis = currentMillis;
+
+//}  // mills() 2번째 if문 
+  delay(2000);
+  if(DHT11.temperature >= 25 && DHT11.humidity){ 
+   //선풍기와 창문 열리게   
+  }
+   
+   
+} //loop문 
+ /* 
+  [토양센서]
+  0 - 300 : 높은 습도 상태
+  300 - 700 : 보통 습도 상태
+  700 - 950 : 건조 상태
+  [빗방울센서]
+  0 - 300 : 비 많이옴
+  300 - 700 : 비 옴
+  700 - 950 : 비 살짝 옴
+*/
